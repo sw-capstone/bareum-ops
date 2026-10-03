@@ -77,6 +77,7 @@ jobs:
 
       - name: Sync GitHub and Jira
         env:
+          JIRA_ASSIGNEE_MAP: ${{ vars.JIRA_ASSIGNEE_MAP }}
           GH_TOKEN: ${{ steps.bot.outputs.token }}
           JIRA_CLIENT_ID: ${{ secrets.JIRA_CLIENT_ID }}
           JIRA_CLIENT_SECRET: ${{ secrets.JIRA_CLIENT_SECRET }}

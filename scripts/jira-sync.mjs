@@ -1,6 +1,6 @@
 import { readFile, appendFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import config from '../config/jira.mjs';
+import { loadConfig } from '../config/jira.mjs';
 import { HttpClient, jiraClient } from './lib/http.mjs';
 import { GitHub } from './lib/github.mjs';
 import { Jira } from './lib/jira.mjs';
@@ -32,6 +32,7 @@ function required(environment, name) {
 }
 
 export async function run(environment = process.env) {
+  const config = loadConfig(environment);
   const event = JSON.parse(await readFile(required(environment, 'GITHUB_EVENT_PATH'), 'utf8'));
   const target = eventTarget(required(environment, 'GITHUB_EVENT_NAME'), event, environment);
   if (target.kind !== 'verify' && !Object.hasOwn(config.repositories, target.source.repository)) {

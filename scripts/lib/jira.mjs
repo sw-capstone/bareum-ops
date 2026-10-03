@@ -54,9 +54,11 @@ export class Jira {
     if (logins.length > 1) {
       throw new Error('Jira supports one assignee; choose one GitHub assignee before syncing.');
     }
-    const accountId = logins.length ? this.config.assignees[logins[0]] : null;
+    const login = logins[0]?.toLowerCase();
+    const accountId = login && Object.hasOwn(this.config.assignees, login)
+      ? this.config.assignees[login] : null;
     if (logins.length && !accountId) {
-      throw new Error(`Add Jira accountId mapping for GitHub assignee ${logins[0]} in config/jira.mjs.`);
+      throw new Error(`Add Jira accountId mapping for GitHub assignee ${logins[0]} in organization variable JIRA_ASSIGNEE_MAP.`);
     }
     const bug = issue.labels.some(label => /\bbug\b/i.test(label.name));
     const typeName = bug ? this.config.issueTypes.bug : this.config.issueTypes.task;
