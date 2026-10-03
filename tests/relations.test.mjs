@@ -61,7 +61,7 @@ test('Jira Bug type follows a GitHub bug label without rewriting its title', asy
   state.issue.title = '[Bug] Login fails';
   state.issue.labels = [{ name: ':bug: bug' }];
   await sync.issue(state.source, 'opened', []);
-  assert.equal(state.tickets.get('BRM-1').fields.issuetype.id, 'bug');
+  assert.equal(state.tickets.get('BRM-1').fields.issuetype.id, config.issueTypes.bug);
   assert.equal(state.tickets.get('BRM-1').fields.summary, '[Bug] Login fails');
 });
 

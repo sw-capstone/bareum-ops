@@ -7,7 +7,7 @@ test('organization mapping is loaded afresh and GitHub logins are case insensiti
   const first = loadConfig({ JIRA_ASSIGNEE_MAP: '{"SeaMooll":"712020:account-1"}' });
   const second = loadConfig({ JIRA_ASSIGNEE_MAP: '{"seamooll":"712020:account-2"}' });
   const jira = new Jira({}, second);
-  jira.types = [{ id: '1', name: 'Task', subtask: false }];
+  jira.types = [{ id: second.issueTypes.task, name: 'Task', subtask: false }];
   const fields = jira.fields({ title: 'Task', body: '', html_url: 'https://github.com/example',
     assignees: [{ login: 'SeaMooll' }], labels: [] }, { repository: 'sw-capstone/bareum-web', number: 1 });
   assert.equal(first.assignees.seamooll, '712020:account-1');
@@ -18,7 +18,7 @@ test('absent mapping permits unassigned issues but never guesses an assigned acc
   for (const raw of [undefined, '', '  ', '{}']) {
     const config = loadConfig({ JIRA_ASSIGNEE_MAP: raw });
     const jira = new Jira({}, config);
-    jira.types = [{ id: '1', name: 'Task', subtask: false }];
+    jira.types = [{ id: config.issueTypes.task, name: 'Task', subtask: false }];
     const issue = { title: 'Task', body: '', html_url: 'https://github.com/example', assignees: [], labels: [] };
     const source = { repository: 'sw-capstone/bareum-web', number: 1 };
     assert.equal(jira.fields(issue, source).assignee, null);

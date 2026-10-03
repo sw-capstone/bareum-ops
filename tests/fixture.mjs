@@ -31,11 +31,14 @@ export async function fixture() {
     if (path === '/_edge/tenant_info') return reply(200, { cloudId: '12345678-1234-1234-1234-123456789abc' });
     if (path === '/oauth/token') return reply(200, { access_token: 'minted-secret', expires_in: 3600 });
     if (path.endsWith('/project/BRM')) return reply(200, {
-      key: 'BRM', issueTypes: [{ id: 'task', name: 'Task' }, { id: 'bug', name: 'Bug' }],
+      key: 'BRM', issueTypes: [],
     });
-    if (path.endsWith('/project/BRM/statuses')) return reply(200, [{
+    if (path.endsWith('/project/BRM/statuses')) return reply(200, [
+      { id: config.issueTypes.task, name: 'Task', subtask: false },
+      { id: config.issueTypes.bug, name: 'Bug', subtask: false },
+    ].map(type => ({ ...type,
       statuses: Object.values(config.statuses).map(id => ({ id })),
-    }]);
+    })));
     if (path.endsWith('/mypermissions')) return reply(200, { permissions: Object.fromEntries(
       url.searchParams.get('permissions').split(',').map(name =>
         [name, { havePermission: name === 'EDIT_ISSUES' ? state.permissions : true }]),

@@ -10,6 +10,7 @@ export class Jira {
   async verify() {
     const project = await this.client.request(`/project/${this.config.project}`);
     const workflows = await this.client.request(`/project/${this.config.project}/statuses`);
+    if (!Array.isArray(workflows)) throw new Error('Jira issue types unavailable.');
     const statuses = new Set(workflows.flatMap(type => type.statuses.map(status => status.id)));
     for (const id of Object.values(this.config.statuses)) {
       if (!statuses.has(id)) throw new Error(`BRM workflow is missing status ${id}.`);
@@ -23,8 +24,12 @@ export class Jira {
     for (const name of requiredPermissions) {
       if (!permissions.permissions[name]?.havePermission) throw new Error(`Jira bot is missing ${name}.`);
     }
-    this.types = project.issueTypes;
-    if (!Array.isArray(this.types)) throw new Error('Jira issue types unavailable.');
+    this.types = workflows;
+    for (const id of Object.values(this.config.issueTypes)) {
+      if (!this.types.some(type => type.id === id && !type.subtask)) {
+        throw new Error(`Jira issue type ${id} is not available in ${this.config.project}.`);
+      }
+    }
     return project.key;
   }
 
@@ -61,9 +66,9 @@ export class Jira {
       throw new Error(`Add Jira accountId mapping for GitHub assignee ${logins[0]} in organization variable JIRA_ASSIGNEE_MAP.`);
     }
     const bug = issue.labels.some(label => /\bbug\b/i.test(label.name));
-    const typeName = bug ? this.config.issueTypes.bug : this.config.issueTypes.task;
-    const type = this.types.find(item => item.name === typeName && !item.subtask);
-    if (!type) throw new Error(`Jira issue type ${typeName} is not available.`);
+    const typeId = bug ? this.config.issueTypes.bug : this.config.issueTypes.task;
+    const type = this.types.find(item => item.id === typeId && !item.subtask);
+    if (!type) throw new Error(`Jira issue type ${typeId} is not available in ${this.config.project}.`);
     return {
       summary: issue.title,
       description: description(issue, source, alias),

@@ -17,7 +17,7 @@ const config = {
     done: '10036',
     cancelled: '10037',
   },
-  issueTypes: { task: 'Task', bug: 'Bug' },
+  issueTypes: { task: '10037', bug: '10036' },
   // Runtime mappings come from the organization variable JIRA_ASSIGNEE_MAP.
   assignees: {},
 };
