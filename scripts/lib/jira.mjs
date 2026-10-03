@@ -101,7 +101,7 @@ export class Jira {
       fields: { ...fields, labels },
     } });
     await this.client.request(`/issue/${key}/properties/github-source`, {
-      method: 'PUT', body: source,
+      method: 'PUT', body: source, expectJson: false,
     });
     await this.link(key, {
       globalId: `github-issue:${source.repository}#${source.number}`,

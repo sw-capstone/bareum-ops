@@ -3,6 +3,31 @@ import assert from 'node:assert/strict';
 import { HttpClient, jiraClient, ApiError } from '../scripts/lib/http.mjs';
 import { fixture } from './fixture.mjs';
 
+test('successful property writes accept empty 200 and 201 responses only when JSON is not expected', async () => {
+  for (const status of [200, 201]) {
+    let calls = 0;
+    const client = new HttpClient({ base: 'https://example.invalid/api', service: 'Jira',
+      fetcher: async () => { calls += 1; return new Response('', { status }); },
+    });
+    assert.equal(await client.request('/issue/BRM-1/properties/github-source', {
+      method: 'PUT', body: {}, expectJson: false,
+    }), null);
+    assert.equal(calls, 1);
+    await assert.rejects(client.request('/issue/BRM-1'), /could not read JSON response from GET/);
+  }
+});
+
+test('invalid JSON errors identify the endpoint without exposing response contents', async () => {
+  const client = new HttpClient({ base: 'https://example.invalid/api', service: 'Jira',
+    fetcher: async () => new Response('private-response-secret', { status: 200 }),
+  });
+  await assert.rejects(client.request('/issue/BRM-1'), error => {
+    assert.match(error.message, /GET \/api\/issue\/BRM-1 \(HTTP 200\)/);
+    assert.equal(error.message.includes('private-response-secret'), false);
+    return true;
+  });
+});
+
 test('OAuth credentials go only to the token endpoint and the minted token goes to Jira', async t => {
   const f = await fixture();
   t.after(f.close);

@@ -16,7 +16,7 @@ export class HttpClient {
     this.fetcher = fetcher;
   }
 
-  async request(path, { method = 'GET', body, headers = {} } = {}) {
+  async request(path, { method = 'GET', body, headers = {}, expectJson = true } = {}) {
     const url = new URL(`${this.base.href.replace(/\/$/, '')}/${path.replace(/^\//, '')}`);
     if (url.origin !== this.base.origin) throw new Error('Unexpected API origin.');
     const options = {
@@ -47,7 +47,15 @@ export class HttpClient {
         throw new ApiError(this.service, response.status, method, url.pathname);
       }
       if (response.status === 204) return null;
-      return response.json();
+      if (!expectJson) {
+        await response.body?.cancel();
+        return null;
+      }
+      try {
+        return await response.json();
+      } catch {
+        throw new Error(`${this.service}: could not read JSON response from ${method} ${url.pathname} (HTTP ${response.status}).`);
+      }
     }
   }
 }

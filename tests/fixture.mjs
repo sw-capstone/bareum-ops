@@ -70,7 +70,7 @@ export async function fixture() {
         return reply(201, { id: 1 });
       }
       if (suffix === 'properties/github-source') {
-        if (req.method === 'PUT') { ticket.source = body; return reply(204); }
+        if (req.method === 'PUT') { ticket.source = body; return reply(200); }
         return ticket.source ? reply(200, { value: ticket.source }) : reply(404, {});
       }
       if (suffix === 'transitions') {
