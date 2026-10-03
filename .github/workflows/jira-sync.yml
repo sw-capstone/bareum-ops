@@ -9,6 +9,8 @@ on:
         required: true
       JIRA_CLIENT_SECRET:
         required: true
+      DISCORD_WEBHOOK_URL:
+        required: false
   workflow_dispatch:
     inputs:
       mode:
@@ -82,3 +84,21 @@ jobs:
           SYNC_REPOSITORY: ${{ inputs.repository }}
           SYNC_ISSUE_NUMBER: ${{ inputs.issue-number }}
         run: node scripts/jira-sync.mjs
+
+  notify-failure:
+    needs: sync
+    if: ${{ always() && needs.sync.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out notification code
+        uses: actions/checkout@v4
+        with:
+          repository: sw-capstone/bareum-ops
+          ref: main
+          persist-credentials: false
+
+      - name: Notify Discord of sync failure
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: node scripts/notify-failure.mjs
