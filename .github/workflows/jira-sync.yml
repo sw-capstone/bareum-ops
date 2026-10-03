@@ -1,0 +1,84 @@
+name: Jira sync
+
+on:
+  workflow_call:
+    secrets:
+      OPS_APP_PRIVATE_KEY:
+        required: true
+      JIRA_CLIENT_ID:
+        required: true
+      JIRA_CLIENT_SECRET:
+        required: true
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Verify access without writes, or sync one existing GitHub issue
+        type: choice
+        options: [verify, issue]
+        default: verify
+      repository:
+        description: Repository to sync (only used in issue mode)
+        type: choice
+        options:
+          - sw-capstone/bareum-ops
+          - sw-capstone/bareum-web
+          - sw-capstone/bareum-server
+          - sw-capstone/bareum-ai
+      issue-number:
+        description: Existing GitHub issue number (only used in issue mode)
+        type: string
+
+permissions:
+  contents: read
+
+# Issue creation and manual repair for the same source must never overlap.
+# Queued events read current API state rather than replaying stale event payloads.
+concurrency:
+  group: jira-${{ inputs.repository || github.repository }}-${{ github.event.pull_request && 'pr' || 'issue' }}-${{ inputs.issue-number || github.event.issue.number || github.event.pull_request.number || 'verify' }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: >-
+      github.repository_owner == 'sw-capstone' &&
+      (github.event_name == 'issues' || github.event_name == 'workflow_dispatch' ||
+       github.event_name == 'pull_request_target' || github.event_name == 'pull_request')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out trusted central automation
+        uses: actions/checkout@v4
+        with:
+          repository: sw-capstone/bareum-ops
+          ref: main
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Test automation
+        run: node --test tests/*.test.mjs
+
+      - name: Create organization bot token
+        id: bot
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.OPS_APP_ID }}
+          private-key: ${{ secrets.OPS_APP_PRIVATE_KEY }}
+          owner: sw-capstone
+          repositories: bareum-web,bareum-server,bareum-ai,bareum-ops
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: write
+
+      - name: Sync GitHub and Jira
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
+          JIRA_CLIENT_ID: ${{ secrets.JIRA_CLIENT_ID }}
+          JIRA_CLIENT_SECRET: ${{ secrets.JIRA_CLIENT_SECRET }}
+          SYNC_MODE: ${{ inputs.mode }}
+          SYNC_REPOSITORY: ${{ inputs.repository }}
+          SYNC_ISSUE_NUMBER: ${{ inputs.issue-number }}
+        run: node scripts/jira-sync.mjs
