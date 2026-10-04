@@ -76,7 +76,7 @@ export class Jira {
     const type = this.types.find(item => item.id === typeId && !item.subtask);
     if (!type) throw new Error(`Jira issue type ${typeId} is not available in ${this.config.project}.`);
     return {
-      summary: issue.title,
+      summary: `${alias} · ${issue.title}`,
       description: description(issue, source, alias),
       assignee: accountId ? { accountId } : null,
       issuetype: { id: type.id },

@@ -37,6 +37,18 @@ test('BRM workflow IDs select Task and Bug despite localized names and empty pro
   assert.deepEqual(jira.fields(issue, source).issuetype, { id: '10036' });
 });
 
+test('Jira summaries identify each repository while preserving the original GitHub title', async () => {
+  const { jira } = setup(workflows());
+  await jira.verify();
+  const issue = { title: '[Chore] Jira 동기화 워크플로 추가', body: '',
+    html_url: 'https://github.com/example', assignees: [], labels: [] };
+  for (const [repository, alias] of Object.entries(config.repositories)) {
+    assert.equal(jira.fields(issue, { repository, number: 16 }).summary,
+      `${alias} · [Chore] Jira 동기화 워크플로 추가`);
+    assert.equal(issue.title, '[Chore] Jira 동기화 워크플로 추가');
+  }
+});
+
 test('missing or subtask-only configured types fail verification before any write', async () => {
   for (const id of ['10037', '10036']) {
     for (const subtaskOnly of [false, true]) {

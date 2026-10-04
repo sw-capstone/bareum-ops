@@ -17,7 +17,8 @@ test('issue creation records both links and repeat execution creates no duplicat
   assert.equal(state.comments.length, 1);
   assert.match(state.comments[0].body, /bareum.atlassian.net\/browse\/BRM-1/);
   assert.deepEqual(state.tickets.get('BRM-1').source, state.source);
-  assert.equal(state.tickets.get('BRM-1').fields.summary, '[Feat] Login');
+  assert.equal(state.tickets.get('BRM-1').fields.summary, 'web · [Feat] Login');
+  assert.equal(state.issue.title, '[Feat] Login');
   assert.equal(Object.keys(state.tickets.get('BRM-1').links).length, 1);
 });
 
@@ -25,11 +26,13 @@ test('metadata edits preserve Jira planning fields and manual start', async t =>
   const { sync, state } = await setup(t);
   await sync.issue(state.source, 'opened', []);
   const ticket = state.tickets.get('BRM-1');
+  ticket.fields.summary = '[Feat] Login';
   ticket.fields.status.id = config.statuses.progress;
   state.issue.title = '[Feat] Revised login';
   state.issue.body = 'Updated requirements';
   await sync.issue(state.source, 'edited', []);
-  assert.equal(ticket.fields.summary, '[Feat] Revised login');
+  assert.equal(ticket.fields.summary, 'web · [Feat] Revised login');
+  assert.equal(state.issue.title, '[Feat] Revised login');
   assert.equal(ticket.fields.status.id, config.statuses.progress);
   assert.equal(ticket.fields.priority.name, 'High');
   assert.equal(ticket.fields.sprint, 7);

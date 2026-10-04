@@ -56,13 +56,14 @@ test('unmapped linked GitHub issue does not get a ticket just because a PR opene
   assert.equal(state.creates, 0);
 });
 
-test('Jira Bug type follows a GitHub bug label without rewriting its title', async t => {
+test('Jira Bug type follows a GitHub bug label and preserves the GitHub title after the repo prefix', async t => {
   const { sync, state } = await setup(t);
   state.issue.title = '[Bug] Login fails';
   state.issue.labels = [{ name: ':bug: bug' }];
   await sync.issue(state.source, 'opened', []);
   assert.equal(state.tickets.get('BRM-1').fields.issuetype.id, config.issueTypes.bug);
-  assert.equal(state.tickets.get('BRM-1').fields.summary, '[Bug] Login fails');
+  assert.equal(state.tickets.get('BRM-1').fields.summary, 'web · [Bug] Login fails');
+  assert.equal(state.issue.title, '[Bug] Login fails');
 });
 
 test('assignee lookup uses an explicit identity mapping', async t => {
