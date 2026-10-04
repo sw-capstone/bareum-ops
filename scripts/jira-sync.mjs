@@ -5,6 +5,7 @@ import { HttpClient, jiraClient } from './lib/http.mjs';
 import { GitHub } from './lib/github.mjs';
 import { Jira } from './lib/jira.mjs';
 import { Sync } from './lib/sync.mjs';
+import { SyncError, recordFailure } from './lib/failure.mjs';
 
 export function eventTarget(eventName, event, environment) {
   const repository = event.repository?.full_name ?? environment.GITHUB_REPOSITORY;
@@ -27,7 +28,7 @@ export function eventTarget(eventName, event, environment) {
 }
 
 function required(environment, name) {
-  if (!environment[name]) throw new Error(`Missing ${name}.`);
+  if (!environment[name]) throw new SyncError('configuration', `Missing ${name}.`);
   return environment[name];
 }
 
@@ -83,6 +84,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     await run();
   } catch (error) {
+    try {
+      await recordFailure(error, process.env);
+    } catch {
+      process.stderr.write('Could not record failure details for notification.\n');
+    }
     // HTTP response bodies and raw network errors can contain credentials or issue text.
     const safeMessage = error instanceof Error && !['TypeError', 'SyntaxError'].includes(error.name)
       ? error.message : 'Sync failed while reading data or contacting an API.';

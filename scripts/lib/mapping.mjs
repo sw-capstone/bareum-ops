@@ -1,4 +1,5 @@
 import { ApiError } from './http.mjs';
+import { SyncError } from './failure.mjs';
 
 const marker = /<!-- team-ops-jira:(\{[^\n]*\}) -->/;
 
@@ -57,9 +58,11 @@ export class Mapping {
       });
       return recovered;
     }
-    if (!create) throw new Error('GitHub issue has no Jira mapping yet; run its issue sync first.');
+    if (!create) throw new SyncError('mapping_missing',
+      'GitHub issue has no Jira mapping yet; run its issue sync first.', { source });
     if (record?.state === 'pending') {
-      throw new Error('Previous Jira creation may have succeeded. Retry after search indexing; do not create another ticket.');
+      throw new SyncError('mapping_pending',
+        'Previous Jira creation may have succeeded. Retry after search indexing; do not create another ticket.', { source });
     }
     record = await this.save(source, {
       version: 1, ...source, commentId: record?.commentId, state: 'pending', key: null,

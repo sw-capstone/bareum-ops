@@ -1,5 +1,6 @@
 import { description, sourceLabel } from './policy.mjs';
 import { ApiError } from './http.mjs';
+import { SyncError } from './failure.mjs';
 
 export class Jira {
   constructor(client, config) {
@@ -13,7 +14,7 @@ export class Jira {
     if (!Array.isArray(workflows)) throw new Error('Jira issue types unavailable.');
     const statuses = new Set(workflows.flatMap(type => type.statuses.map(status => status.id)));
     for (const id of Object.values(this.config.statuses)) {
-      if (!statuses.has(id)) throw new Error(`BRM workflow is missing status ${id}.`);
+      if (!statuses.has(id)) throw new SyncError('configuration', `BRM workflow is missing status ${id}.`);
     }
     const requiredPermissions = [
       'BROWSE_PROJECTS', 'CREATE_ISSUES', 'EDIT_ISSUES', 'TRANSITION_ISSUES', 'ASSIGN_ISSUES', 'LINK_ISSUES',
@@ -22,12 +23,14 @@ export class Jira {
       `/mypermissions?projectKey=${this.config.project}&permissions=${requiredPermissions.join(',')}`,
     );
     for (const name of requiredPermissions) {
-      if (!permissions.permissions[name]?.havePermission) throw new Error(`Jira bot is missing ${name}.`);
+      if (!permissions.permissions[name]?.havePermission) {
+        throw new SyncError('permission', `Jira bot is missing ${name}.`, { service: 'Jira' });
+      }
     }
     this.types = workflows;
     for (const id of Object.values(this.config.issueTypes)) {
       if (!this.types.some(type => type.id === id && !type.subtask)) {
-        throw new Error(`Jira issue type ${id} is not available in ${this.config.project}.`);
+        throw new SyncError('configuration', `Jira issue type ${id} is not available in ${this.config.project}.`);
       }
     }
     return project.key;
@@ -57,13 +60,16 @@ export class Jira {
     const alias = this.config.repositories[source.repository];
     const logins = issue.assignees.map(user => user.login);
     if (logins.length > 1) {
-      throw new Error('Jira supports one assignee; choose one GitHub assignee before syncing.');
+      throw new SyncError('assignee_multiple',
+        'Jira supports one assignee; choose one GitHub assignee before syncing.', { source });
     }
     const login = logins[0]?.toLowerCase();
     const accountId = login && Object.hasOwn(this.config.assignees, login)
       ? this.config.assignees[login] : null;
     if (logins.length && !accountId) {
-      throw new Error(`Add Jira accountId mapping for GitHub assignee ${logins[0]} in organization variable JIRA_ASSIGNEE_MAP.`);
+      throw new SyncError('assignee_missing',
+        `Add Jira accountId mapping for GitHub assignee ${logins[0]} in organization variable JIRA_ASSIGNEE_MAP.`,
+        { source, login: logins[0] });
     }
     const bug = issue.labels.some(label => /\bbug\b/i.test(label.name));
     const typeId = bug ? this.config.issueTypes.bug : this.config.issueTypes.task;

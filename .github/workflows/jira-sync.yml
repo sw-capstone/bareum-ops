@@ -41,6 +41,13 @@ concurrency:
 
 jobs:
   sync:
+    outputs:
+      failure: ${{ steps.sync.outputs.failure }}
+      failure-stage: >-
+        ${{ steps.checkout.outcome == 'failure' && 'checkout' ||
+            steps.node.outcome == 'failure' && 'node' ||
+            steps.tests.outcome == 'failure' && 'tests' ||
+            steps.bot.outcome == 'failure' && 'bot' || 'sync' }}
     if: >-
       github.repository_owner == 'sw-capstone' &&
       (github.event_name == 'issues' || github.event_name == 'workflow_dispatch' ||
@@ -49,6 +56,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out trusted central automation
+        id: checkout
         uses: actions/checkout@v4
         with:
           repository: sw-capstone/bareum-ops
@@ -56,11 +64,13 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node
+        id: node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
       - name: Test automation
+        id: tests
         run: node --test tests/*.test.mjs
 
       - name: Create organization bot token
@@ -76,6 +86,7 @@ jobs:
           permission-pull-requests: write
 
       - name: Sync GitHub and Jira
+        id: sync
         env:
           JIRA_ASSIGNEE_MAP: ${{ vars.JIRA_ASSIGNEE_MAP }}
           GH_TOKEN: ${{ steps.bot.outputs.token }}
@@ -102,4 +113,8 @@ jobs:
       - name: Notify Discord of sync failure
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SYNC_FAILURE: ${{ needs.sync.outputs.failure }}
+          FAILURE_STAGE: ${{ needs.sync.outputs.failure-stage }}
+          SYNC_REPOSITORY: ${{ inputs.repository }}
+          SYNC_ISSUE_NUMBER: ${{ inputs.issue-number }}
         run: node scripts/notify-failure.mjs

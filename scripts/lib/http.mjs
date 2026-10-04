@@ -4,7 +4,9 @@ export class ApiError extends Error {
   constructor(service, status, method, pathname) {
     super(`${service}: ${method} ${pathname} failed (HTTP ${status}).`);
     this.name = 'ApiError';
+    this.service = service;
     this.status = status;
+    this.method = method;
   }
 }
 
