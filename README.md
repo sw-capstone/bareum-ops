@@ -4,30 +4,7 @@ GitHub 이슈·PR과 Jira를 연결하는 팀 공통 자동화 저장소입니�
 
 ## 연동 구조
 
-```mermaid
-flowchart LR
-  subgraph GH["GitHub"]
-    G["web · server · ai<br/>이슈·PR"]
-  end
-  subgraph OPS["공통 자동화"]
-    O["bareum-ops"]
-  end
-  subgraph JR["Jira"]
-    J["BRM 티켓"]
-  end
-
-  G -->|"이슈·PR 이벤트"| O
-  O -->|"티켓 생성·갱신"| J
-  O -.->|"실패 시"| D["Discord 알림"]
-
-  style GH fill:#fff8ed,stroke:#d6c9b8,color:#222
-  style OPS fill:#edf4fb,stroke:#b7cbe0,color:#222
-  style JR fill:#eef7ed,stroke:#b9cfb5,color:#222
-  style G fill:#fff8ed,stroke:#d6c9b8,color:#222
-  style O fill:#edf4fb,stroke:#b7cbe0,color:#222
-  style J fill:#eef7ed,stroke:#b9cfb5,color:#222
-  style D fill:#f4f1fa,stroke:#c8bddc,color:#222
-```
+![GitHub 이슈·PR을 bareum-ops에서 Jira와 동기화하고, 실패 시 Discord로 알림을 보내는 구조](docs/images/jira-integration.svg)
 
 ## 동기화 규칙
 

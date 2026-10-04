@@ -1,0 +1,13 @@
+flowchart LR
+  subgraph GH["GitHub"]
+    G["web · server · ai<br/>이슈·PR"]
+  end
+  subgraph OPS["공통 자동화"]
+    O["bareum-ops"]
+  end
+  subgraph JR["Jira"]
+    J["BRM 티켓"]
+  end
+  G -->|"이슈·PR 이벤트"| O
+  O -->|"티켓 생성·갱신"| J
+  O -.->|"실패 시"| D["Discord 알림"]
