@@ -9,6 +9,7 @@ import { SyncError, describeFailure, recordFailure } from '../scripts/lib/failur
 import { ApiError } from '../scripts/lib/http.mjs';
 import { fixture } from './fixture.mjs';
 import { failureMessage } from '../scripts/notify-failure.mjs';
+import { assigneeWarning } from '../scripts/lib/assignees.mjs';
 
 test('real missing mapping flows from PR processing to a source-specific Discord message', async t => {
   const f = await fixture();
@@ -30,22 +31,14 @@ test('real missing mapping flows from PR processing to a source-specific Discord
   assert.match(message, /수동 동기화/);
 });
 
-test('real unknown assignee produces a safe login and repair guidance before any writes', async t => {
+test('unknown assignee reports a warning while the ticket sync succeeds', async t => {
   const f = await fixture();
   t.after(f.close);
   f.state.issue.assignees = [{ login: 'unmapped-user' }];
-  await assert.rejects(f.sync.issue(f.state.source, 'assigned', []), error => {
-    const failure = describeFailure(error);
-    assert.equal(failure.code, 'assignee_missing');
-    assert.equal(failure.login, 'unmapped-user');
-    const message = failureMessage({ GITHUB_REPOSITORY: f.state.source.repository,
-      GITHUB_RUN_ID: '42', SYNC_FAILURE: JSON.stringify(failure) },
-    { action: 'assigned', issue: { number: 10 } });
-    assert.match(message, /unmapped-user/);
-    assert.match(message, /JIRA_ASSIGNEE_MAP/);
-    return true;
-  });
-  assert.equal(f.state.creates, 0);
+  const result = await f.sync.issue(f.state.source, 'assigned', []);
+  assert.equal(result.warnings[0].code, 'assignee_missing');
+  assert.match(assigneeWarning(result.warnings[0]), /unmapped-user.*매핑/);
+  assert.equal(f.state.creates, 1);
 });
 
 test('HTTP failures are classified without exporting endpoint paths or raw errors', () => {

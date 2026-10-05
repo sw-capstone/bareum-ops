@@ -31,7 +31,8 @@ export class Sync {
         !pr.draft && manualJiraKeys(pr, this.config.project).includes(key)),
     }, this.config.statuses);
     await this.jira.transition(key, status);
-    return { source, key, status };
+    const warnings = await this.jira.syncAssignee(key, issue.assignees, current.fields.assignee?.accountId);
+    return { source, key, status, warnings };
   }
 
   async pullRequest(source, previousBody) {

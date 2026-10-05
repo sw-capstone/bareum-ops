@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadConfig } from '../config/jira.mjs';
 import { Jira } from '../scripts/lib/jira.mjs';
+import { assigneePlan } from '../scripts/lib/assignees.mjs';
 
 test('organization mapping is loaded afresh and GitHub logins are case insensitive', () => {
   const first = loadConfig({ JIRA_ASSIGNEE_MAP: '{"SeaMooll":"712020:account-1"}' });
@@ -11,7 +12,9 @@ test('organization mapping is loaded afresh and GitHub logins are case insensiti
   const fields = jira.fields({ title: 'Task', body: '', html_url: 'https://github.com/example',
     assignees: [{ login: 'SeaMooll' }], labels: [] }, { repository: 'sw-capstone/bareum-web', number: 1 });
   assert.equal(first.assignees.seamooll, '712020:account-1');
-  assert.deepEqual(fields.assignee, { accountId: '712020:account-2' });
+  assert.equal(Object.hasOwn(fields, 'assignee'), false);
+  assert.deepEqual(assigneePlan([{ login: 'SeaMooll' }], second.assignees).candidates,
+    [{ login: 'SeaMooll', accountId: '712020:account-2' }]);
 });
 
 test('absent mapping permits unassigned issues but never guesses an assigned account', () => {
@@ -21,9 +24,12 @@ test('absent mapping permits unassigned issues but never guesses an assigned acc
     jira.types = [{ id: config.issueTypes.task, name: 'Task', subtask: false }];
     const issue = { title: 'Task', body: '', html_url: 'https://github.com/example', assignees: [], labels: [] };
     const source = { repository: 'sw-capstone/bareum-web', number: 1 };
-    assert.equal(jira.fields(issue, source).assignee, null);
+    assert.equal(Object.hasOwn(jira.fields(issue, source), 'assignee'), false);
     issue.assignees = [{ login: 'constructor' }];
-    assert.throws(() => jira.fields(issue, source), /organization variable JIRA_ASSIGNEE_MAP/);
+    assert.equal(Object.hasOwn(jira.fields(issue, source), 'assignee'), false);
+    assert.deepEqual(assigneePlan(issue.assignees, config.assignees), {
+      candidates: [], warnings: [{ code: 'assignee_missing', login: 'constructor' }],
+    });
   }
 });
 

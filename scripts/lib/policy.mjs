@@ -55,6 +55,9 @@ export function description(issue, source, alias) {
         { type: 'link', attrs: { href: `https://github.com/${source.repository}/issues/${source.number}` } },
       ] },
     ] },
+    ...(issue.assignees?.length ? [{ type: 'paragraph', content: [
+      { type: 'text', text: `참여자: ${issue.assignees.map(user => user.login).join(', ')}` },
+    ] }] : []),
     ...paragraphs,
   ] };
 }

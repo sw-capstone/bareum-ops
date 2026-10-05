@@ -72,4 +72,4 @@ GitHub 조직의 **Settings → Secrets and variables → Actions**에서 관리
 node --test tests/*.test.mjs
 ```
 
-동기화 실패 시 Actions 로그를 확인합니다. 담당자 매핑 누락, 인증 정보, Jira 접근 권한을 먼저 확인하고, 문제를 해결한 뒤 `issue` 모드로 해당 이슈를 다시 동기화할 수 있습니다.
+동기화 실패나 담당자 경고가 발생하면 Actions 로그를 확인합니다. 담당자 매핑, 인증 정보, Jira 접근 권한을 확인하고, 문제를 해결한 뒤 `issue` 모드로 해당 이슈를 다시 동기화할 수 있습니다.

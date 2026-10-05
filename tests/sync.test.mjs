@@ -116,12 +116,16 @@ test('non-bot comments cannot supply a forged mapping', async t => {
   assert.equal(state.tickets.has('BRM-99'), false);
 });
 
-test('unknown assignee fails before creating a ticket or reservation', async t => {
+test('unknown assignee warns without blocking ticket creation or status updates', async t => {
   const { sync, state } = await setup(t);
   state.issue.assignees = [{ login: 'unmapped-user' }];
-  await assert.rejects(sync.issue(state.source, 'opened', []), /accountId mapping/);
-  assert.equal(state.creates, 0);
-  assert.equal(state.comments.length, 0);
+  state.issue.state = 'closed';
+  state.issue.state_reason = 'completed';
+  const result = await sync.issue(state.source, 'opened', []);
+  assert.deepEqual(result.warnings, [{ code: 'assignee_missing', login: 'unmapped-user' }]);
+  assert.equal(state.creates, 1);
+  assert.equal(state.comments.length, 1);
+  assert.equal(state.tickets.get(result.key).fields.status.id, config.statuses.done);
 });
 
 test('cancelled issue wins even when its PR remains ready', async t => {

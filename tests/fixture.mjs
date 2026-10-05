@@ -14,7 +14,7 @@ export async function fixture() {
       number: 10, title: '[Feat] Login', body: 'Acceptance criteria\n- Login works',
       state: 'open', state_reason: null, assignees: [], labels: [],
     },
-    pulls: [], permissions: true,
+    pulls: [], permissions: true, assignmentFailures: {}, defaultAssignee: null,
   };
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -54,7 +54,8 @@ export async function fixture() {
       if (state.createFailure === 'rejected') return reply(400, {});
       const key = `BRM-${state.tickets.size + 1}`;
       state.tickets.set(key, {
-        key, fields: { ...body.fields, status: { id: config.statuses.todo }, priority: { name: 'High' },
+        key, fields: { ...body.fields, assignee: state.defaultAssignee,
+          status: { id: config.statuses.todo }, priority: { name: 'High' },
           sprint: 7, estimate: 5, epic: 'BRM-99' }, source: body.properties[0].value, links: {},
       });
       if (state.createFailure === 'ambiguous') return reply(503, {});
@@ -65,6 +66,12 @@ export async function fixture() {
       const ticket = state.tickets.get(ticketMatch[1]);
       if (!ticket) return reply(404, {});
       const suffix = ticketMatch[2];
+      if (suffix === 'assignee' && req.method === 'PUT') {
+        const failure = state.assignmentFailures[body.accountId ?? 'unassigned'];
+        if (failure) return reply(failure, {});
+        ticket.fields.assignee = body.accountId ? { accountId: body.accountId } : null;
+        return reply(204);
+      }
       if (suffix === 'remotelink' && req.method === 'POST') {
         ticket.links[body.globalId] = body.object;
         return reply(201, { id: 1 });

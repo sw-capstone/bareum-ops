@@ -1,6 +1,7 @@
 import { description, sourceLabel } from './policy.mjs';
 import { ApiError } from './http.mjs';
 import { SyncError } from './failure.mjs';
+import { assigneePlan } from './assignees.mjs';
 
 export class Jira {
   constructor(client, config) {
@@ -17,7 +18,7 @@ export class Jira {
       if (!statuses.has(id)) throw new SyncError('configuration', `BRM workflow is missing status ${id}.`);
     }
     const requiredPermissions = [
-      'BROWSE_PROJECTS', 'CREATE_ISSUES', 'EDIT_ISSUES', 'TRANSITION_ISSUES', 'ASSIGN_ISSUES', 'LINK_ISSUES',
+      'BROWSE_PROJECTS', 'CREATE_ISSUES', 'EDIT_ISSUES', 'TRANSITION_ISSUES', 'LINK_ISSUES',
     ];
     const permissions = await this.client.request(
       `/mypermissions?projectKey=${this.config.project}&permissions=${requiredPermissions.join(',')}`,
@@ -58,19 +59,6 @@ export class Jira {
 
   fields(issue, source) {
     const alias = this.config.repositories[source.repository];
-    const logins = issue.assignees.map(user => user.login);
-    if (logins.length > 1) {
-      throw new SyncError('assignee_multiple',
-        'Jira supports one assignee; choose one GitHub assignee before syncing.', { source });
-    }
-    const login = logins[0]?.toLowerCase();
-    const accountId = login && Object.hasOwn(this.config.assignees, login)
-      ? this.config.assignees[login] : null;
-    if (logins.length && !accountId) {
-      throw new SyncError('assignee_missing',
-        `Add Jira accountId mapping for GitHub assignee ${logins[0]} in organization variable JIRA_ASSIGNEE_MAP.`,
-        { source, login: logins[0] });
-    }
     const bug = issue.labels.some(label => /\bbug\b/i.test(label.name));
     const typeId = bug ? this.config.issueTypes.bug : this.config.issueTypes.task;
     const type = this.types.find(item => item.id === typeId && !item.subtask);
@@ -78,9 +66,28 @@ export class Jira {
     return {
       summary: `${alias} · ${issue.title}`,
       description: description(issue, source, alias),
-      assignee: accountId ? { accountId } : null,
       issuetype: { id: type.id },
     };
+  }
+
+  async syncAssignee(key, users, currentAccountId) {
+    const { candidates, warnings } = assigneePlan(users, this.config.assignees, currentAccountId);
+    for (const candidate of [...candidates, { accountId: null }]) {
+      if (candidate.accountId === (currentAccountId ?? null)) return warnings;
+      try {
+        await this.client.request(`/issue/${key}/assignee`, {
+          method: 'PUT', body: { accountId: candidate.accountId },
+        });
+        return warnings;
+      } catch (error) {
+        // Only isolated assignment rejections are recoverable; service failures still fail the run.
+        if (!(error instanceof ApiError) || ![400, 403, 422].includes(error.status)) throw error;
+        warnings.push(candidate.accountId === null
+          ? { code: 'assignee_clear_rejected' }
+          : { code: 'assignee_rejected', login: candidate.login });
+      }
+    }
+    return warnings;
   }
 
   create(source, fields) {

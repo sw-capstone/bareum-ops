@@ -67,9 +67,9 @@ test('Jira Bug type follows a GitHub bug label and preserves the GitHub title af
 });
 
 test('assignee lookup uses an explicit identity mapping', async t => {
-  const { jira, state } = await setup(t);
+  const { jira, state, sync } = await setup(t);
   jira.config = { ...config, assignees: { developer: 'jira-account-123' } };
   state.issue.assignees = [{ login: 'developer' }];
-  const fields = jira.fields(state.issue, state.source);
-  assert.deepEqual(fields.assignee, { accountId: 'jira-account-123' });
+  await sync.issue(state.source, 'opened', []);
+  assert.deepEqual(state.tickets.get('BRM-1').fields.assignee, { accountId: 'jira-account-123' });
 });

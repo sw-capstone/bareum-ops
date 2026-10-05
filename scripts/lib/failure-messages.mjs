@@ -7,14 +7,6 @@ export const failureMessages = Object.freeze({
     cause: `${issue}의 Jira 티켓 생성 결과를 아직 확인하지 못했습니다.`,
     remedy: 'Jira에 티켓이 이미 생성됐을 수 있습니다. 새 티켓을 직접 만들지 말고, 잠시 후 해당 이슈 동기화를 재실행해주세요. 반복되면 로그와 Jira 티켓을 확인해주세요.',
   }),
-  assignee_missing: ({ issue, login }) => ({
-    cause: `${issue}의 GitHub 담당자${login ? ` (${login})` : ''}에 대한 Jira 계정 매핑이 없습니다.`,
-    remedy: '조직 Variable JIRA_ASSIGNEE_MAP에 해당 담당자의 Jira accountId를 등록한 뒤 재실행해주세요.',
-  }),
-  assignee_multiple: ({ issue }) => ({
-    cause: `${issue}에 담당자가 여러 명 지정되어 있습니다. Jira는 담당자 한 명만 지원합니다.`,
-    remedy: 'GitHub 이슈 담당자를 한 명으로 정한 뒤 다시 동기화해주세요.',
-  }),
   authentication: ({ service }) => ({
     cause: `${service} 인증이 거부됐습니다.`,
     remedy: '인증 Secret의 등록·만료 여부와 해당 레포의 Secret 접근 범위를 확인한 뒤 재실행해주세요.',

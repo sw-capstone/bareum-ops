@@ -6,6 +6,7 @@ import { GitHub } from './lib/github.mjs';
 import { Jira } from './lib/jira.mjs';
 import { Sync } from './lib/sync.mjs';
 import { SyncError, recordFailure } from './lib/failure.mjs';
+import { assigneeWarning } from './lib/assignees.mjs';
 
 export function eventTarget(eventName, event, environment) {
   const repository = event.repository?.full_name ?? environment.GITHUB_REPOSITORY;
@@ -71,6 +72,13 @@ export async function run(environment = process.env) {
   await report(results.length
     ? results.map(result => `${result.key}: status ${result.status}`).join('\n')
     : 'No linked GitHub issue or explicit Jira key. No ticket created or changed.', environment);
+  for (const result of results) {
+    for (const warning of result.warnings ?? []) {
+      const message = `${result.key}: ${assigneeWarning(warning)} 티켓 정보와 상태는 동기화했습니다.`;
+      if (environment.GITHUB_ACTIONS === 'true') process.stdout.write(`::warning::${message}\n`);
+      await report(message, environment);
+    }
+  }
 }
 
 async function report(message, environment) {

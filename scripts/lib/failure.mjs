@@ -11,7 +11,7 @@ export class SyncError extends Error {
 }
 
 export const failureCodes = Object.freeze([
-  'mapping_missing', 'mapping_pending', 'assignee_missing', 'assignee_multiple',
+  'mapping_missing', 'mapping_pending',
   'permission', 'configuration', 'authentication', 'temporary_api', 'api', 'unknown',
 ]);
 const codes = new Set(failureCodes);
