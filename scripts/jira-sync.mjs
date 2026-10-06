@@ -19,10 +19,13 @@ export function eventTarget(eventName, event, environment) {
         previousBody: event.changes?.body?.from };
     case 'workflow_dispatch':
       if (environment.SYNC_MODE === 'verify') return { kind: 'verify' };
-      if (environment.SYNC_MODE !== 'issue') throw new Error('Choose verify or issue mode.');
+      if (environment.SYNC_MODE === 'hierarchy') return { kind: 'hierarchy' };
+      if (environment.SYNC_MODE !== 'issue') throw new Error('Choose verify, issue or hierarchy mode.');
       return { kind: 'issue', source: {
         repository: environment.SYNC_REPOSITORY, number: Number(environment.SYNC_ISSUE_NUMBER),
       }, reason: 'reconcile' };
+    case 'schedule':
+      return { kind: 'hierarchy' };
     default:
       throw new Error(`Unsupported event: ${eventName}.`);
   }
@@ -37,7 +40,7 @@ export async function run(environment = process.env) {
   const config = loadConfig(environment);
   const event = JSON.parse(await readFile(required(environment, 'GITHUB_EVENT_PATH'), 'utf8'));
   const target = eventTarget(required(environment, 'GITHUB_EVENT_NAME'), event, environment);
-  if (target.kind !== 'verify' && !Object.hasOwn(config.repositories, target.source.repository)) {
+  if (['issue', 'pr'].includes(target.kind) && !Object.hasOwn(config.repositories, target.source.repository)) {
     throw new Error('The event repository is not in the configured allowlist.');
   }
   const github = new GitHub(new HttpClient({
@@ -66,12 +69,17 @@ export async function run(environment = process.env) {
     case 'pr':
       results = await sync.pullRequest(target.source, target.previousBody);
       break;
+    case 'hierarchy':
+      results = await sync.reconcileHierarchy();
+      break;
     default:
       throw new Error('Unexpected sync target.');
   }
   await report(results.length
-    ? results.map(result => `${result.key}: status ${result.status}`).join('\n')
-    : 'No linked GitHub issue or explicit Jira key. No ticket created or changed.', environment);
+    ? results.map(result => result.status === undefined
+      ? `${result.key}: GitHub relationship links synchronized.` : `${result.key}: status ${result.status}`).join('\n')
+    : target.kind === 'hierarchy' ? 'GitHub relationship links are up to date. No ticket created or changed.'
+      : 'No linked GitHub issue or explicit Jira key. No ticket created or changed.', environment);
   for (const result of results) {
     for (const warning of result.warnings ?? []) {
       const message = `${result.key}: ${assigneeWarning(warning)} 티켓 정보와 상태는 동기화했습니다.`;

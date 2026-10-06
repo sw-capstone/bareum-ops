@@ -16,6 +16,8 @@ GitHub 이슈·PR과 Jira를 연결하는 팀 공통 자동화 저장소입니�
 | 이슈 완료로 닫힘 | Done |
 | 이슈 취소로 닫힘 | Cancelled |
 | 이슈 재오픈 | 리뷰 가능한 연결 PR이 있으면 In Review, 없으면 To Do |
+| GitHub 부모·서브 이슈 연결 | 모두 독립 Task·Bug로 유지하고 `relates to` 링크로 연결 |
+| 서브 이슈의 부모 변경·연결 해제 | 자동화가 관리하는 관계 링크를 변경·제거. 기존 티켓 번호 유지 |
 
 - PR 병합만으로 Done이 되지는 않습니다. **GitHub 이슈가 완료로 닫혀야 합니다.**
 - 연결된 PR을 병합 없이 닫거나 Draft로 바꾸면, 다른 리뷰 가능한 연결 PR이 없는 경우 In Progress로 돌아갑니다.
@@ -57,7 +59,7 @@ GitHub 조직의 **Settings → Secrets and variables → Actions**에서 관리
 
 ## 실행 및 확인
 
-**자동 실행:** 각 레포의 이슈·PR 이벤트로 실행됩니다. 실행 결과는 해당 레포의 **Actions → Jira sync**에서 확인합니다.
+**자동 실행:** 각 레포의 이슈·PR 이벤트로 실행됩니다. 실행 결과는 해당 레포의 **Actions → Jira sync**에서 확인합니다. 정기 관계 동기화 실행은 bareum-ops에서 확인합니다.
 
 **수동 실행:** bareum-ops의 **Actions → Jira sync → Run workflow**에서 선택합니다.
 
@@ -65,6 +67,7 @@ GitHub 조직의 **Settings → Secrets and variables → Actions**에서 관리
 |---|---|
 | `verify` | GitHub·Jira 접근 권한과 설정 확인. 티켓 변경 없음 |
 | `issue` | `repository`와 `issue-number`로 지정한 기존 이슈 동기화 |
+| `hierarchy` | 네 저장소의 연결된 이슈를 확인해 관계 링크 연결·이동·해제 반영. 저장소·이슈 번호 입력은 사용하지 않음 |
 
 **로컬 테스트:** Node.js 22 환경에서 실행합니다.
 

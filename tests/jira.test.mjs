@@ -3,18 +3,19 @@ import assert from 'node:assert/strict';
 import config from '../config/jira.mjs';
 import { Jira } from '../scripts/lib/jira.mjs';
 
-function setup(types) {
+function setup(types, linkTypes = [{ id: '42', name: 'Relates', inward: '관련', outward: '관련' }], settings = config) {
   const requests = [];
   const jira = new Jira({ async request(path, options = {}) {
     requests.push({ path, method: options.method ?? 'GET' });
     if (path === '/project/BRM') return { key: 'BRM', issueTypes: [] };
     if (path === '/project/BRM/statuses') return types;
+    if (path === '/issueLinkType') return { issueLinkTypes: linkTypes };
     if (path.startsWith('/mypermissions?')) {
       const names = new URLSearchParams(path.split('?')[1]).get('permissions').split(',');
       return { permissions: Object.fromEntries(names.map(name => [name, { havePermission: true }])) };
     }
     throw new Error(`Unexpected request: ${path}`);
-  } }, config);
+  } }, settings);
   return { jira, requests };
 }
 
@@ -35,6 +36,28 @@ test('BRM workflow IDs select Task and Bug despite localized names and empty pro
   assert.deepEqual(jira.fields(issue, source).issuetype, { id: '10037' });
   issue.labels = [{ name: 'bug' }];
   assert.deepEqual(jira.fields(issue, source).issuetype, { id: '10036' });
+});
+
+test('relationship type ID is discovered and no Epic metadata is required', async () => {
+  const { jira } = setup(workflows());
+  await jira.verify();
+  assert.equal(jira.parentLinkType.id, '42');
+});
+
+test('missing, ambiguous or asymmetric relationship types fail before writes', async () => {
+  const relates = { id: '42', name: 'Relates', inward: 'relates to', outward: 'relates to' };
+  for (const types of [[], [relates, { ...relates, id: '43' }], [{ ...relates, outward: 'blocks' }]]) {
+    const { jira, requests } = setup(workflows(), types);
+    await assert.rejects(jira.verify(), /one symmetric Relates/);
+    assert.ok(requests.every(request => request.method === 'GET'));
+  }
+});
+
+test('a renamed relationship type can be configured without guessing its ID', async () => {
+  const { jira } = setup(workflows(), [{ id: '75', name: '관련 작업', inward: '관련', outward: '관련' }],
+    { ...config, parentLinkType: '관련 작업' });
+  await jira.verify();
+  assert.equal(jira.parentLinkType.id, '75');
 });
 
 test('Jira summaries identify each repository while preserving the original GitHub title', async () => {

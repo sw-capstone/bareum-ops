@@ -20,6 +20,7 @@ const config = {
     cancelled: '10037',
   },
   issueTypes: { task: '10037', bug: '10036' },
+  parentLinkType: 'Relates',
   // Runtime mappings come from the organization variable JIRA_ASSIGNEE_MAP.
   assignees: {},
 };

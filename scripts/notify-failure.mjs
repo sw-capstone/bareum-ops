@@ -35,7 +35,10 @@ export function failureMessage(environment, event) {
   const alias = aliases[repository.split('/')[1]] ?? repository;
   const item = event.issue ?? event.pull_request;
   const number = Number.isSafeInteger(item?.number) && item.number > 0 ? item.number : null;
-  const target = number ? `${alias} · ${event.pull_request ? 'PR' : '이슈'} #${number}`
+  const scheduled = environment.GITHUB_EVENT_NAME === 'schedule' || typeof event.schedule === 'string';
+  const hierarchy = scheduled || environment.SYNC_MODE === 'hierarchy';
+  const target = hierarchy ? '연결된 GitHub 이슈의 부모·자식 관계'
+    : number ? `${alias} · ${event.pull_request ? 'PR' : '이슈'} #${number}`
     : manualSource ? `${sourceName(manualSource)} · 수동 동기화` : `${alias} · 수동 실행`;
   const merged = event.action === 'closed' && event.pull_request?.merged === true;
   const issueActions = { opened: '이슈 생성', edited: '이슈 수정', assigned: '담당자 지정',
@@ -46,7 +49,8 @@ export function failureMessage(environment, event) {
     converted_to_draft: 'PR Draft 전환' };
   const action = event.pull_request ? prActions[event.action] : issueActions[event.action];
   const situation = stage ? `${stage} 중` : merged ? 'PR 병합 후 Jira 연결 정보 반영 중'
-    : action ? `${action} 후 Jira 동기화 중` : '수동 검증 또는 동기화 중';
+    : hierarchy ? `${scheduled ? '정기' : '수동'} 부모·자식 관계 동기화 중`
+      : action ? `${action} 후 Jira 동기화 중` : '수동 검증 또는 동기화 중';
   const { cause, remedy } = stage
     ? { cause: `${stage} 단계에서 실패했습니다. Jira 동기화 단계는 실행되지 않았습니다.`,
       remedy: '실행 로그에서 해당 단계의 오류를 확인하고 해결한 뒤 재실행해주세요.' }

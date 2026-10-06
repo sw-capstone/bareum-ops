@@ -1,5 +1,6 @@
 import { issueReferences, manualJiraKeys, desiredStatus } from './policy.mjs';
 import { Mapping } from './mapping.mjs';
+import { SyncError } from './failure.mjs';
 
 export class Sync {
   constructor({ github, jira, config }) {
@@ -20,6 +21,7 @@ export class Sync {
     this.validateSource(source);
     const issue = await this.github.issue(source);
     if (issue.pull_request) throw new Error('A pull request number is not an issue number.');
+    const parent = await this.github.parent(source);
     const fields = this.jira.fields(issue, source);
     const key = await this.mapping.resolve(source, { create, fields });
     const current = await this.jira.update(key, fields, source);
@@ -32,7 +34,36 @@ export class Sync {
     }, this.config.statuses);
     await this.jira.transition(key, status);
     const warnings = await this.jira.syncAssignee(key, issue.assignees, current.fields.assignee?.accountId);
+    const parentKey = parent ? await this.mapping.resolve(parent) : null;
+    await this.jira.syncParentLink(key, parentKey);
     return { source, key, status, warnings };
+  }
+
+  async reconcileHierarchy() {
+    const sources = await this.github.issues();
+    const entries = [];
+    for (const source of sources) {
+      this.validateSource(source);
+      let key;
+      try {
+        key = await this.mapping.resolve(source);
+      } catch (error) {
+        if (!(error instanceof SyncError) || error.code !== 'mapping_missing') throw error;
+        continue;
+      }
+      const parent = await this.github.parent(source);
+      entries.push({ source, parent, key });
+    }
+    const results = [];
+    for (const { source, parent, key } of entries) {
+      const mappedParent = parent && entries.find(entry =>
+        entry.source.repository === parent.repository && entry.source.number === parent.number);
+      if (parent && !mappedParent) {
+        throw new SyncError('mapping_missing', 'GitHub parent issue has no Jira mapping; run its issue sync first.', { source: parent });
+      }
+      if (await this.jira.syncParentLink(key, mappedParent?.key ?? null)) results.push({ source, key });
+    }
+    return results;
   }
 
   async pullRequest(source, previousBody) {

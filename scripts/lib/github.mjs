@@ -1,4 +1,5 @@
 import { issueReferences } from './policy.mjs';
+import { ApiError } from './http.mjs';
 
 export class GitHub {
   constructor(client, config) {
@@ -18,6 +19,35 @@ export class GitHub {
 
   issue(source) {
     return this.client.request(`/repos/${source.repository}/issues/${source.number}`);
+  }
+
+  source(issue) {
+    const repository = /^https:\/\/api\.github\.com\/repos\/([^/]+\/[^/]+)$/.exec(issue.repository_url ?? '')?.[1];
+    if (!Object.hasOwn(this.config.repositories, repository) ||
+        !Number.isSafeInteger(issue.number) || issue.number < 1 || issue.pull_request) {
+      throw new Error('GitHub hierarchy contains an unavailable repository or invalid issue.');
+    }
+    return { repository, number: issue.number };
+  }
+
+  async parent(source) {
+    try {
+      return this.source(await this.client.request(`/repos/${source.repository}/issues/${source.number}/parent`));
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 404) throw error;
+      return null;
+    }
+  }
+
+  async issues() {
+    const sources = [];
+    for (const repository of Object.keys(this.config.repositories)) {
+      const issues = await this.pages(`/repos/${repository}/issues?state=all`);
+      for (const issue of issues) {
+        if (!issue.pull_request) sources.push({ repository, number: issue.number });
+      }
+    }
+    return sources;
   }
 
   async pullRequest(source) {

@@ -1,6 +1,8 @@
 name: Jira sync
 
 on:
+  schedule:
+    - cron: '0 * * * *'
   workflow_call:
     secrets:
       OPS_APP_PRIVATE_KEY:
@@ -14,9 +16,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Verify access without writes, or sync one existing GitHub issue
+        description: Verify access, sync one issue, or reconcile GitHub relationship links
         type: choice
-        options: [verify, issue]
+        options: [verify, issue, hierarchy]
         default: verify
       repository:
         description: Repository to sync (only used in issue mode)
@@ -36,7 +38,7 @@ permissions:
 # Issue creation and manual repair for the same source must never overlap.
 # Queued events read current API state rather than replaying stale event payloads.
 concurrency:
-  group: jira-${{ inputs.repository || github.repository }}-${{ github.event.pull_request && 'pr' || 'issue' }}-${{ inputs.issue-number || github.event.issue.number || github.event.pull_request.number || 'verify' }}
+  group: ${{ (github.event_name == 'schedule' || inputs.mode == 'hierarchy') && 'jira-hierarchy' || format('jira-{0}-{1}-{2}', inputs.repository || github.repository, github.event.pull_request && 'pr' || 'issue', inputs.issue-number || github.event.issue.number || github.event.pull_request.number || 'verify') }}
   cancel-in-progress: false
 
 jobs:
@@ -50,7 +52,7 @@ jobs:
             steps.bot.outcome == 'failure' && 'bot' || 'sync' }}
     if: >-
       github.repository_owner == 'sw-capstone' &&
-      (github.event_name == 'issues' || github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' ||
        github.event_name == 'pull_request_target' || github.event_name == 'pull_request')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -115,6 +117,7 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           SYNC_FAILURE: ${{ needs.sync.outputs.failure }}
           FAILURE_STAGE: ${{ needs.sync.outputs.failure-stage }}
+          SYNC_MODE: ${{ inputs.mode }}
           SYNC_REPOSITORY: ${{ inputs.repository }}
           SYNC_ISSUE_NUMBER: ${{ inputs.issue-number }}
         run: node scripts/notify-failure.mjs

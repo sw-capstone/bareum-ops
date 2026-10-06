@@ -34,6 +34,13 @@ export class Jira {
         throw new SyncError('configuration', `Jira issue type ${id} is not available in ${this.config.project}.`);
       }
     }
+    const { issueLinkTypes } = await this.client.request('/issueLinkType');
+    if (!Array.isArray(issueLinkTypes)) throw new Error('Jira issue link types unavailable.');
+    const matching = issueLinkTypes.filter(type => type.name === this.config.parentLinkType);
+    if (matching.length !== 1 || !/^\d+$/.test(matching[0].id) || matching[0].inward !== matching[0].outward) {
+      throw new SyncError('configuration', `Jira must have one symmetric ${this.config.parentLinkType} link type.`);
+    }
+    this.parentLinkType = matching[0];
     return project.key;
   }
 
@@ -41,7 +48,7 @@ export class Jira {
     if (!new RegExp(`^${this.config.project}-[1-9]\\d*$`).test(key)) {
       throw new Error('Invalid Jira issue key.');
     }
-    return this.client.request(`/issue/${key}?fields=summary,description,status,assignee,labels,issuetype`);
+    return this.client.request(`/issue/${key}?fields=summary,description,status,assignee,labels,issuetype,issuelinks`);
   }
 
   async find(source) {
@@ -98,6 +105,92 @@ export class Jira {
       },
       properties: [{ key: 'github-source', value: source }],
     } });
+  }
+
+  async parentLinkRecord(key) {
+    try {
+      const { value } = await this.client.request(`/issue/${key}/properties/github-parent-link`);
+      const detached = value?.key === null && value.typeId === null && value.linkId === null && value.owned === false;
+      const linked = new RegExp(`^${this.config.project}-[1-9]\\d*$`).test(value?.key) &&
+        typeof value?.typeId === 'string' && /^\d+$/.test(value.typeId) && typeof value.owned === 'boolean' &&
+        (value.linkId === null && value.owned || typeof value.linkId === 'string' && /^\d+$/.test(value.linkId));
+      if (!detached && !linked) {
+        throw new Error('Invalid GitHub-managed Jira relationship record.');
+      }
+      return value;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
+  }
+
+  async syncParentLink(key, parentKey) {
+    let current = await this.issue(key);
+    if (parentKey !== null) await this.issue(parentKey);
+    let record = await this.parentLinkRecord(key);
+    const matching = (issue, target, typeId) => (issue.fields.issuelinks ?? []).filter(link =>
+      link.type.id === typeId && (link.inwardIssue?.key ?? link.outwardIssue?.key) === target);
+    const save = async value => {
+      await this.client.request(`/issue/${key}/properties/github-parent-link`, {
+        method: 'PUT', body: value, expectJson: false,
+      });
+      const saved = await this.parentLinkRecord(key);
+      if (saved?.key !== value.key || saved.typeId !== value.typeId || saved.linkId !== value.linkId || saved.owned !== value.owned) {
+        throw new Error(`Jira relationship record did not persist for ${key}.`);
+      }
+      record = value;
+    };
+    const typeId = this.parentLinkType.id;
+    let changed = false;
+    if (record?.owned && (record.key !== parentKey || record.typeId !== typeId)) {
+      const stale = matching(current, record.key, record.typeId).filter(link => record.linkId === null || link.id === record.linkId);
+      for (const link of stale) {
+        if (!/^\d+$/.test(link.id)) throw new Error('Invalid Jira relationship link ID.');
+        try {
+          await this.client.request(`/issueLink/${link.id}`, { method: 'DELETE', expectJson: false });
+        } catch (error) {
+          if (!(error instanceof ApiError) || error.status !== 404) throw error;
+        }
+      }
+      current = await this.issue(key);
+      if (matching(current, record.key, record.typeId).some(link => stale.some(old => old.id === link.id))) {
+        throw new Error(`Jira relationship removal did not persist for ${key}.`);
+      }
+      changed = true;
+    }
+    if (parentKey === null) {
+      if (record?.key != null) {
+        await save({ key: null, typeId: null, linkId: null, owned: false });
+        changed = true;
+      }
+      return changed;
+    }
+    const existing = matching(current, parentKey, typeId)[0];
+    const same = record?.key === parentKey && record.typeId === typeId;
+    if (!existing) {
+      // Persist creation intent first so a lost POST response remains recoverable.
+      await save({ key: parentKey, typeId, linkId: null, owned: true });
+      try {
+        await this.client.request('/issueLink', { method: 'POST', expectJson: false, body: {
+          type: { id: typeId }, outwardIssue: { key: parentKey }, inwardIssue: { key },
+        } });
+      } catch (error) {
+        if (error instanceof ApiError && [400, 401, 403, 404, 422, 429].includes(error.status)) {
+          await save({ key: null, typeId: null, linkId: null, owned: false });
+        }
+        throw error;
+      }
+      const created = matching(await this.issue(key), parentKey, typeId)[0];
+      if (!created) {
+        throw new Error(`Jira relationship creation did not persist for ${key}.`);
+      }
+      await save({ key: parentKey, typeId, linkId: created.id, owned: true });
+      changed = true;
+    } else if (!same || record.linkId !== existing.id) {
+      await save({ key: parentKey, typeId, linkId: existing.id, owned: same && record.linkId === null && record.owned });
+      changed = true;
+    }
+    return changed;
   }
 
   async update(key, fields, source) {
